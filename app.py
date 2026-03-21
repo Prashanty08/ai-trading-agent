@@ -3,6 +3,7 @@ from openai import OpenAI
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
+import base64
 
 # =========================
 # DEBUG
@@ -84,7 +85,7 @@ Psychology Instruction:
 # UI
 # =========================
 
-st.title("📊 AI Trading Agent (Multi Chart Version)")
+st.title("📊 AI Trading Agent (Multi Chart Fixed)")
 
 symbol = st.text_input("Stock / Index (e.g. RELIANCE.NS or ^NSEI)")
 
@@ -172,15 +173,17 @@ if st.button("Analyze Trade"):
 
         st.write("Processing...")
 
-        # If multiple images uploaded
+        # MULTI IMAGE FIX (BASE64)
         if uploaded_files:
             content = [{"type": "text", "text": SYSTEM_PROMPT + user_input}]
 
             for file in uploaded_files:
                 image_bytes = file.read()
+                base64_image = base64.b64encode(image_bytes).decode("utf-8")
+
                 content.append({
                     "type": "input_image",
-                    "image_bytes": image_bytes
+                    "image_url": f"data:image/png;base64,{base64_image}"
                 })
 
             response = client.responses.create(
