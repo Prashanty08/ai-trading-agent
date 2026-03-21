@@ -1,2 +1,5 @@
 streamlit
 openai
+yfinance
+plotly
+pandas
