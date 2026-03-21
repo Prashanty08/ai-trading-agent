@@ -85,7 +85,7 @@ Psychology Instruction:
 # UI
 # =========================
 
-st.title("📊 AI Trading Agent (Multi Chart Fixed)")
+st.title("📊 AI Trading Agent (Final Fixed Version)")
 
 symbol = st.text_input("Stock / Index (e.g. RELIANCE.NS or ^NSEI)")
 
@@ -173,9 +173,10 @@ if st.button("Analyze Trade"):
 
         st.write("Processing...")
 
-        # MULTI IMAGE FIX (BASE64)
         if uploaded_files:
-            content = [{"type": "text", "text": SYSTEM_PROMPT + user_input}]
+            content = [
+                {"type": "input_text", "text": SYSTEM_PROMPT + user_input}
+            ]
 
             for file in uploaded_files:
                 image_bytes = file.read()
