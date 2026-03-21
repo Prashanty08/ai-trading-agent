@@ -44,31 +44,27 @@ def get_trend(data):
 SYSTEM_PROMPT = """
 You are an elite options trader and strict trading coach.
 
-Your job is NOT to predict market but to enforce discipline and high-quality trades.
-
 Analyze based on:
-1. Multi-timeframe alignment
-2. Market structure
-3. Support & Resistance
-4. OI data (smart money behavior)
-5. Risk-reward (minimum 1:2)
-6. System detected trend
-7. Option context (Call/Put + Strike relevance)
+- Multi-timeframe alignment
+- Market structure
+- Support & Resistance
+- OI data
+- Risk-reward (minimum 1:2)
+- Trend + Option context
 
 STRICT RULES:
-- If no clear setup → NO TRADE
-- If RR < 1:2 → NO TRADE
-- If market is sideways → NO TRADE
+- No clear setup → NO TRADE
+- RR < 1:2 → NO TRADE
+- Sideways → NO TRADE
 
 OPTION LOGIC:
-- Call (CE) → prefer bullish setups
-- Put (PE) → prefer bearish setups
-- Avoid trades where option contradicts trend
-- Consider if strike is ITM / ATM / OTM
+- CE → bullish setups
+- PE → bearish setups
+- Avoid mismatch with trend
 
-PSYCHOLOGY RULES:
-- Do not exit early in profit
-- Enforce strict stop loss
+PSYCHOLOGY:
+- Do not exit early
+- Respect stop loss
 
 Output:
 
@@ -82,15 +78,13 @@ Confidence:
 Reason:
 
 Psychology Instruction:
-- What to DO
-- What NOT to do
 """
 
 # =========================
 # UI
 # =========================
 
-st.title("📊 AI Trading Agent (Option Smart Version)")
+st.title("📊 AI Trading Agent (Multi Chart Version)")
 
 symbol = st.text_input("Stock / Index (e.g. RELIANCE.NS or ^NSEI)")
 
@@ -116,7 +110,6 @@ if symbol:
         st.write(f"📊 Current Price: {current_price}")
         st.write(f"📈 Detected Trend: {trend}")
 
-        # Chart
         fig = go.Figure(data=[
             go.Candlestick(
                 x=data.index,
@@ -143,10 +136,14 @@ oi = st.text_area("OI Data")
 pos = st.text_area("Your Position")
 
 # =========================
-# IMAGE UPLOAD
+# MULTIPLE IMAGE UPLOAD
 # =========================
 
-uploaded_file = st.file_uploader("Upload Chart Screenshot", type=["png", "jpg", "jpeg"])
+uploaded_files = st.file_uploader(
+    "Upload Multiple Charts (5m / 15m / 1H)",
+    type=["png", "jpg", "jpeg"],
+    accept_multiple_files=True
+)
 
 # =========================
 # ANALYSIS
@@ -157,7 +154,7 @@ if st.button("Analyze Trade"):
         user_input = f"""
         Symbol: {symbol}
         Current Price: {current_price}
-        Detected Trend: {trend}
+        Trend: {trend}
 
         Option Type: {option_type}
         Strike Price: {strike_price}
@@ -168,35 +165,33 @@ if st.button("Analyze Trade"):
         1H: {tf_1h}
         Daily: {tf_daily}
 
-        Support/Resistance: {sr}
-        OI Data: {oi}
+        S/R: {sr}
+        OI: {oi}
         Position: {pos}
         """
 
         st.write("Processing...")
 
-        # WITH IMAGE
-        if uploaded_file is not None:
-            image_bytes = uploaded_file.read()
+        # If multiple images uploaded
+        if uploaded_files:
+            content = [{"type": "text", "text": SYSTEM_PROMPT + user_input}]
+
+            for file in uploaded_files:
+                image_bytes = file.read()
+                content.append({
+                    "type": "input_image",
+                    "image_bytes": image_bytes
+                })
 
             response = client.responses.create(
                 model="gpt-4o-mini",
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": SYSTEM_PROMPT + user_input},
-                            {"type": "input_image", "image_bytes": image_bytes}
-                        ]
-                    }
-                ]
+                input=[{"role": "user", "content": content}]
             )
 
             st.success("Analysis Complete")
             st.write(response.output[0].content[0].text)
 
         else:
-            # WITHOUT IMAGE
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
