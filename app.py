@@ -5,67 +5,65 @@ import pandas as pd
 import plotly.graph_objects as go
 import base64
 
-# =========================
-# DEBUG
-# =========================
 st.write("App is running...")
 
-# =========================
-# LOAD API
-# =========================
 try:
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 except Exception as e:
     st.error(f"API Key Error: {e}")
 
 # =========================
-# DATA FUNCTIONS
+# FUNCTIONS
 # =========================
 
 def get_stock_data(symbol):
     try:
-        data = yf.download(symbol, period="5d", interval="5m")
-        return data
+        return yf.download(symbol, period="5d", interval="5m")
     except:
         return None
 
 def get_trend(data):
     try:
-        if data['Close'].iloc[-1] > data['Close'].mean():
-            return "Bullish"
-        else:
-            return "Bearish"
+        return "Bullish" if data['Close'].iloc[-1] > data['Close'].mean() else "Bearish"
+    except:
+        return "Unknown"
+
+def classify_option(current_price, strike_price, option_type):
+    try:
+        diff = current_price - strike_price
+
+        if abs(diff) < 50:
+            return "ATM"
+
+        if option_type == "Call (CE)":
+            return "ITM" if current_price > strike_price else "OTM"
+
+        if option_type == "Put (PE)":
+            return "ITM" if current_price < strike_price else "OTM"
+
     except:
         return "Unknown"
 
 # =========================
-# AI PROMPT
+# PROMPT
 # =========================
 
 SYSTEM_PROMPT = """
-You are an elite options trader and strict trading coach.
-
-Analyze based on:
-- Multi-timeframe alignment
-- Market structure
-- Support & Resistance
-- OI data
-- Risk-reward (minimum 1:2)
-- Trend + Option context
+You are an elite options trader.
 
 STRICT RULES:
-- No clear setup → NO TRADE
+- No alignment → NO TRADE
 - RR < 1:2 → NO TRADE
-- Sideways → NO TRADE
 
 OPTION LOGIC:
-- CE → bullish setups
-- PE → bearish setups
-- Avoid mismatch with trend
+- CE → bullish only
+- PE → bearish only
+- Avoid OTM unless breakout
+- Prefer ATM/ITM
 
 PSYCHOLOGY:
-- Do not exit early
-- Respect stop loss
+- Hold winners
+- Cut losers strictly
 
 Output:
 
@@ -85,21 +83,17 @@ Psychology Instruction:
 # UI
 # =========================
 
-st.title("📊 AI Trading Agent (Final Fixed Version)")
+st.title("📊 AI Trading Agent (Smart Automation)")
 
 symbol = st.text_input("Stock / Index (e.g. RELIANCE.NS or ^NSEI)")
-
 option_type = st.selectbox("Option Type", ["Call (CE)", "Put (PE)"])
 strike_price = st.number_input("Strike Price")
 entry_price = st.number_input("Option Entry Price")
 
-# =========================
-# FETCH DATA
-# =========================
-
 data = None
 trend = "Unknown"
 current_price = None
+option_position = "Unknown"
 
 if symbol:
     data = get_stock_data(symbol)
@@ -107,9 +101,11 @@ if symbol:
     if data is not None and not data.empty:
         current_price = data['Close'].iloc[-1]
         trend = get_trend(data)
+        option_position = classify_option(current_price, strike_price, option_type)
 
         st.write(f"📊 Current Price: {current_price}")
-        st.write(f"📈 Detected Trend: {trend}")
+        st.write(f"📈 Trend: {trend}")
+        st.write(f"🎯 Option Type: {option_position}")
 
         fig = go.Figure(data=[
             go.Candlestick(
@@ -123,26 +119,18 @@ if symbol:
 
         st.plotly_chart(fig, use_container_width=True)
 
-# =========================
-# OPTIONAL INPUTS
-# =========================
-
-tf_5m = st.text_area("5 min Observation")
-tf_15m = st.text_area("15 min Observation")
-tf_1h = st.text_area("1H Observation")
-tf_daily = st.text_area("Daily Observation")
-
-sr = st.text_area("Support / Resistance")
-oi = st.text_area("OI Data")
-pos = st.text_area("Your Position")
-
-# =========================
-# MULTIPLE IMAGE UPLOAD
-# =========================
+# Inputs
+tf_5m = st.text_area("5m")
+tf_15m = st.text_area("15m")
+tf_1h = st.text_area("1H")
+tf_daily = st.text_area("Daily")
+sr = st.text_area("S/R")
+oi = st.text_area("OI")
+pos = st.text_area("Position")
 
 uploaded_files = st.file_uploader(
-    "Upload Multiple Charts (5m / 15m / 1H)",
-    type=["png", "jpg", "jpeg"],
+    "Upload Charts",
+    type=["png", "jpg"],
     accept_multiple_files=True
 )
 
@@ -150,16 +138,17 @@ uploaded_files = st.file_uploader(
 # ANALYSIS
 # =========================
 
-if st.button("Analyze Trade"):
+if st.button("Analyze"):
     try:
         user_input = f"""
         Symbol: {symbol}
-        Current Price: {current_price}
+        Price: {current_price}
         Trend: {trend}
 
-        Option Type: {option_type}
-        Strike Price: {strike_price}
-        Entry Price: {entry_price}
+        Option: {option_type}
+        Strike: {strike_price}
+        Entry: {entry_price}
+        Position Type: {option_position}
 
         5m: {tf_5m}
         15m: {tf_15m}
@@ -174,17 +163,13 @@ if st.button("Analyze Trade"):
         st.write("Processing...")
 
         if uploaded_files:
-            content = [
-                {"type": "input_text", "text": SYSTEM_PROMPT + user_input}
-            ]
+            content = [{"type": "input_text", "text": SYSTEM_PROMPT + user_input}]
 
             for file in uploaded_files:
-                image_bytes = file.read()
-                base64_image = base64.b64encode(image_bytes).decode("utf-8")
-
+                img = base64.b64encode(file.read()).decode("utf-8")
                 content.append({
                     "type": "input_image",
-                    "image_url": f"data:image/png;base64,{base64_image}"
+                    "image_url": f"data:image/png;base64,{img}"
                 })
 
             response = client.responses.create(
@@ -192,7 +177,6 @@ if st.button("Analyze Trade"):
                 input=[{"role": "user", "content": content}]
             )
 
-            st.success("Analysis Complete")
             st.write(response.output[0].content[0].text)
 
         else:
@@ -204,7 +188,6 @@ if st.button("Analyze Trade"):
                 ]
             )
 
-            st.success("Analysis Complete")
             st.write(response.choices[0].message.content)
 
     except Exception as e:
